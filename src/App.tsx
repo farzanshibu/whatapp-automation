@@ -1,6 +1,6 @@
 import  { useState, useEffect } from 'react';
 import QRCode from 'qrcode';
-import { Smartphone, Upload, Send, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { Smartphone, Upload, Send, CheckCircle, XCircle, Loader2, Users } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './components/ui/card';
 import { Input } from './components/ui/input';
@@ -56,6 +56,9 @@ function App() {
   const [progress, setProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
   const [results, setResults] = useState<Results | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [groupName, setGroupName] = useState<string>('');
+  const [isCreatingGroup, setIsCreatingGroup] = useState<boolean>(false);
+  const [groupResult, setGroupResult] = useState<{ success: boolean; groupId?: string; groupName?: string; error?: string } | null>(null);
 
   // WhatsApp Events
   useEffect(() => {
@@ -180,8 +183,8 @@ function App() {
 
   const handleSendMessages = async () => {
     if (!excelData) return;
-    
-    const dataToSend = selectedRows.length > 0 
+
+    const dataToSend = selectedRows.length > 0
       ? selectedRows.map(idx => excelData[idx])
       : excelData;
 
@@ -204,6 +207,35 @@ function App() {
       setResults(result.results);
     } else {
       alert(`Failed to send messages: ${result.error}`);
+    }
+  };
+
+  const handleCreateGroup = async () => {
+    if (!excelData || !phoneColumn || !groupName.trim()) return;
+
+    const dataToUse = selectedRows.length > 0
+      ? selectedRows.map(idx => excelData[idx])
+      : excelData;
+
+    if (!confirm(`Create group "${groupName}" with ${dataToUse.length} participants?`)) return;
+
+    setIsCreatingGroup(true);
+    setGroupResult(null);
+
+    const result = await ipcRenderer.invoke('create-group', {
+      filePath,
+      sheetName: selectedSheet,
+      phoneColumn,
+      groupName: groupName.trim()
+    });
+
+    setIsCreatingGroup(false);
+    setGroupResult(result);
+
+    if (result.success) {
+      alert(`Group "${result.groupName}" created successfully!`);
+    } else {
+      alert(`Failed to create group: ${result.error}`);
     }
   };
 
@@ -558,6 +590,80 @@ function App() {
                     <div className="text-3xl font-bold text-blue-700">{results.total}</div>
                     <div className="text-sm text-blue-600">Total</div>
                   </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Create Group */}
+        {excelData && phoneColumn && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="w-6 h-6" />
+                Create Group
+              </CardTitle>
+              <CardDescription>Create a WhatsApp group with participants from your Excel data</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="group-name">Group Name</Label>
+                <Input
+                  id="group-name"
+                  value={groupName}
+                  onChange={(e) => setGroupName(e.target.value)}
+                  placeholder="Enter group name..."
+                  maxLength={25}
+                />
+              </div>
+
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-2">
+                <p className="font-semibold">Group Summary:</p>
+                <ul className="text-sm space-y-1">
+                  <li>Group name: <strong>{groupName || 'Not set'}</strong></li>
+                  <li>Phone column: <strong>{phoneColumn}</strong></li>
+                  <li>Total participants: <strong>{selectedRows.length > 0 ? selectedRows.length : (excelData?.length || 0)}</strong></li>
+                  {selectedRows.length > 0 && (
+                    <li className="text-green-700">
+                      <strong>Using selected rows only</strong>
+                    </li>
+                  )}
+                </ul>
+              </div>
+
+              <Button
+                onClick={handleCreateGroup}
+                disabled={isCreatingGroup || !groupName.trim()}
+                size="lg"
+                className="w-full"
+                variant="secondary"
+              >
+                {isCreatingGroup ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Creating Group...</>
+                ) : (
+                  <><Users className="w-4 h-4 mr-2" /> Create Group</>
+                )}
+              </Button>
+
+              {groupResult && (
+                <div className={`p-4 rounded-lg border ${
+                  groupResult.success
+                    ? 'bg-green-50 border-green-200 text-green-800'
+                    : 'bg-red-50 border-red-200 text-red-800'
+                }`}>
+                  <p className="font-semibold">
+                    {groupResult.success ? '✅ Group Created Successfully!' : '❌ Failed to Create Group'}
+                  </p>
+                  {groupResult.success ? (
+                    <p className="text-sm mt-1">
+                      Group "{groupResult.groupName}" has been created with participants from your Excel file.
+                    </p>
+                  ) : (
+                    <p className="text-sm mt-1">
+                      Error: {groupResult.error}
+                    </p>
+                  )}
                 </div>
               )}
             </CardContent>

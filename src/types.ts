@@ -46,6 +46,18 @@ export interface ProgressData {
   error?: string;
 }
 
+export interface CreateGroupResult {
+  success: boolean;
+  groupId?: string;
+  groupName?: string;
+  error?: string;
+}
+
+export interface CreateGroupOptions {
+  groupName: string;
+  participants: string[];
+}
+
 export interface WhatsAppHandlerEvents {
   'qr': (qr: string) => void;
   'authenticated': () => void;

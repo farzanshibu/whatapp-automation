@@ -11,6 +11,17 @@ const __dirname = path.dirname(__filename);
 let mainWindow: BrowserWindow | null;
 let whatsappHandler: WhatsAppHandler | null;
 
+// Get the correct base path for resources
+function getResourcePath(...paths: string[]): string {
+    if (app.isPackaged) {
+        // In production: resources are in the app root (where package.json is)
+        return path.join(process.resourcesPath, 'app', ...paths);
+    } else {
+        // In development: go up from dist to project root
+        return path.join(__dirname, '..', ...paths);
+    }
+}
+
 function createWindow(): void {
     mainWindow = new BrowserWindow({
         width: 1400,
@@ -21,15 +32,18 @@ function createWindow(): void {
             nodeIntegration: true,
             contextIsolation: false
         },
-        icon: path.join(__dirname, '..', 'assets', 'icon.png')
+        icon: getResourcePath('assets', 'icon.png')
     });
 
-    // Load the built React app (go up one directory from dist/)
-    const indexPath = path.join(__dirname, '..', 'dist-react', 'index.html');
+    // Load the built React app
+    const indexPath = getResourcePath('dist-react', 'index.html');
+    console.log('Loading index from:', indexPath);
     mainWindow.loadFile(indexPath);
 
     // Open DevTools in development
-    // mainWindow.webContents.openDevTools();
+    if (!app.isPackaged) {
+        // mainWindow.webContents.openDevTools();
+    }
 
     mainWindow.on('closed', () => {
         mainWindow = null;
@@ -38,18 +52,48 @@ function createWindow(): void {
 
 app.whenReady().then(createWindow);
 
-app.on('window-all-closed', () => {
+app.on('window-all-closed', async () => {
+    // Cleanup WhatsApp handler before quitting
     if (whatsappHandler) {
-        whatsappHandler.destroy();
+        try {
+            await whatsappHandler.destroy();
+        } catch (error) {
+            console.error('Error destroying WhatsApp handler:', error);
+        }
+        whatsappHandler = null;
     }
-    if (process.platform !== 'darwin') {
-        app.quit();
-    }
+    
+    // Quit on all platforms (including macOS in this case since it's not a standard app)
+    app.quit();
 });
 
 app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
         createWindow();
+    }
+});
+
+// Graceful shutdown on process termination
+process.on('SIGTERM', async () => {
+    if (whatsappHandler) {
+        await whatsappHandler.destroy();
+    }
+    app.quit();
+});
+
+process.on('SIGINT', async () => {
+    if (whatsappHandler) {
+        await whatsappHandler.destroy();
+    }
+    app.quit();
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught exception:', error);
+    // Show error dialog to user
+    if (mainWindow) {
+        dialog.showErrorBox('Application Error', `An error occurred: ${error.message}`);
     }
 });
 
@@ -172,8 +216,33 @@ ipcMain.handle('send-messages', async (_: IpcMainInvokeEvent, options: SendMessa
 
         return { success: true, results };
     } catch (error) {
-        return { 
-            success: false, 
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+        };
+    }
+});
+
+// Create group
+ipcMain.handle('create-group', async (_: IpcMainInvokeEvent, options: { filePath: string; sheetName: string | null; phoneColumn: string; groupName: string }): Promise<{ success: boolean; groupId?: string; groupName?: string; error?: string }> => {
+    try {
+        if (!whatsappHandler) {
+            throw new Error('WhatsApp handler not initialized');
+        }
+
+        const { filePath, sheetName, phoneColumn, groupName } = options;
+
+        const result = await whatsappHandler.createGroupFromExcel(
+            filePath,
+            sheetName,
+            phoneColumn,
+            groupName
+        );
+
+        return result;
+    } catch (error) {
+        return {
+            success: false,
             error: error instanceof Error ? error.message : 'Unknown error'
         };
     }

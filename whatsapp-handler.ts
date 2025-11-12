@@ -4,7 +4,7 @@ const { Client, LocalAuth } = pkg;
 import XLSX from 'xlsx';
 import fs from 'fs';
 import { EventEmitter } from 'events';
-import { ExcelRow, MessageResult, ProgressData } from './src/types.js';
+import { ExcelRow, MessageResult, ProgressData, CreateGroupResult, CreateGroupOptions } from './src/types.js';
 import { execSync } from 'child_process';
 import path from 'path';
 import { app } from 'electron';
@@ -392,6 +392,50 @@ class WhatsAppHandler extends EventEmitter {
         }
 
         return results;
+    }
+
+    async createGroupFromExcel(
+        filePath: string,
+        sheetName: string | null,
+        phoneColumn: string,
+        groupName: string
+    ): Promise<CreateGroupResult> {
+        try {
+            if (!this.client) {
+                throw new Error('WhatsApp client not initialized');
+            }
+
+            // Read Excel data
+            const data = this.readExcelFile(filePath, sheetName);
+
+            // Extract and format phone numbers
+            const participants: string[] = [];
+            for (const row of data) {
+                const phone = row[phoneColumn];
+                if (phone && !(phone instanceof Date)) {
+                    const formattedPhone = this.formatPhoneNumber(phone);
+                    participants.push(formattedPhone);
+                }
+            }
+
+            if (participants.length === 0) {
+                throw new Error('No valid phone numbers found in the Excel file');
+            }
+
+            // Create the group
+            const group = await this.client.createGroup(groupName, participants) as any;
+
+            return {
+                success: true,
+                groupId: group.id._serialized,
+                groupName: group.name
+            };
+        } catch (error) {
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error occurred while creating group'
+            };
+        }
     }
 
     async destroy(): Promise<void> {

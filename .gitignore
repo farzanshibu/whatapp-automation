@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# WhatsApp session data
+.wwebjs_auth/
+.wwebjs_cache/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Excel files (optional - remove if you want to track your contacts file)
+# *.xlsx
+# *.xls
+
+# Environment variables
+.env
+# Electron build output
+dist/
+dist-electron/
+out/
+build/
+
+# Electron cache
+.electron/
+.electron-builder.yml
+
+# Platform specific
+*.dmg
+*.pkg
+*.deb
+*.rpm
+*.exe
+*.msi
+*.appx
